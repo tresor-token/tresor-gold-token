@@ -6,6 +6,8 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "./lib/ERC20Upgradeable.sol";
 
+error TAUT_NotWhitelisted();
+
 contract TAUT is Initializable, ERC20Upgradeable, OwnableUpgradeable, UUPSUpgradeable {
   // 100% in basis points
   uint256 public constant MAX_BPS = 10000;
@@ -19,13 +21,19 @@ contract TAUT is Initializable, ERC20Upgradeable, OwnableUpgradeable, UUPSUpgrad
   uint256 public feeRate;
   // Fee recipients address
   address public feeRecipient;
+  // The account address that can add accounts to whitelist
+  address public whitelistManager;
   // The variable is used to track time and fee rate dynamics
   uint256 public feeIndex;
-  // The number of days since the unix epoch, that fees was last collected at.
+  // The number of days since the unix epoch, that fees was last collected at
   uint256 public feesCollectionDay;
+  // Shows if the whitelisting is enabled
+  bool public isWhitelisting;
   // Mapping from account address to the fee index value on the day when the balance of the corresponding account
   // was updated manually (i.e. not by automatic fee withdrawal).
   mapping(address => uint256) public accountsFeeIndices;
+  // Mapping that shows if the account address is whitelisted.
+  mapping(address => bool) public isWhitelisted;
 
   /**
    * @notice Emitted when `amount` of tokens was minted to `to` account.
@@ -44,6 +52,24 @@ contract TAUT is Initializable, ERC20Upgradeable, OwnableUpgradeable, UUPSUpgrad
   event Burn(address indexed from, bytes16 id, uint256 amount);
 
   /**
+   * @notice Emitted when `account` account added to whitelist.
+   * @param account The account added to whitelist.
+   */
+  event AddToWhitelist(address account);
+
+  /**
+   * @notice Emitted when `account` account removed from whitelist.
+   * @param account The account removed from whitelist.
+   */
+  event RemoveFromWhitelist(address account);
+
+  /**
+   * @notice Emitted when whitelisting was toggled.
+   * @param isWhitelisting Shows if the whitelisting was enabled or disabled.
+   */
+  event ToggleWhitelisting(bool isWhitelisting);
+
+  /**
    * @notice Emitted when fee rate was updated.
    * @param feeRate The new fee rate.
    */
@@ -54,6 +80,12 @@ contract TAUT is Initializable, ERC20Upgradeable, OwnableUpgradeable, UUPSUpgrad
    * @param feeRecipient The new fee recipient's address.
    */
   event UpdateFeeRecipient(address feeRecipient);
+
+  /**
+   * @notice Emitted when whitelist manager's address was updated.
+   * @param whitelistManager The new whitelist manager's address.
+   */
+  event UpdateWhitelistManager(address whitelistManager);
 
   /**
    * @notice Emitted when fees were collected.
@@ -78,10 +110,12 @@ contract TAUT is Initializable, ERC20Upgradeable, OwnableUpgradeable, UUPSUpgrad
 
   /**
    * @notice Initializes the contract.
-   * @param feeRecipient_ The address of initial fee recipient.
-   * @param feeRate_ The initial fee rate.
+   * @param feeRecipient_ The address of fee recipient.
+   * @param feeRate_ The fee rate.
+   * @param whitelistManager_ The address of whitelist manager.
+   * @param isWhitelisting_ The whitelisting state.
    */
-  function initialize(address feeRecipient_, uint256 feeRate_) public initializer {
+  function initialize(address feeRecipient_, uint256 feeRate_, address whitelistManager_, bool isWhitelisting_) public initializer {
     __ERC20_init("Tresor Gold Token", "TAUT");
     __Ownable_init();
     __UUPSUpgradeable_init();
@@ -91,9 +125,34 @@ contract TAUT is Initializable, ERC20Upgradeable, OwnableUpgradeable, UUPSUpgrad
 
     _setFeeRecipient(feeRecipient_);
     _setFeeRate(feeRate_);
+    _setWhitelistManager(whitelistManager_);
+    _setIsWhitelisting(isWhitelisting_);
   }
 
   function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
+
+  /**
+   * @notice Whitelists `account` account if it hasn't already been whitelisted.
+   * @param account The account to whitelist.
+   */
+  function addToWhitelist(address account) external {
+    require(msg.sender == owner() || msg.sender == whitelistManager, "Invalid caller");
+    require(isWhitelisted[account] == false, "Already whitelisted");
+    _addToWhitelist(account);
+  }
+
+  /**
+   * @notice Removes `account` account from whitelist if it has been whitelisted.
+   * @param account The account to remove from whitelist.
+   */
+  function removeFromWhitelist(address account) external {
+    require(msg.sender == owner() || msg.sender == whitelistManager, "Invalid caller");
+    require(isWhitelisted[account] == true, "Not whitelisted");
+    
+    isWhitelisted[account] = false;
+
+    emit RemoveFromWhitelist(account);
+  }
 
   /**
    * @notice If `amount` of tokens is multiple of 1000000000000000000000, destroys the amount
@@ -150,6 +209,22 @@ contract TAUT is Initializable, ERC20Upgradeable, OwnableUpgradeable, UUPSUpgrad
   }
 
   /**
+   * @notice Sets the whitelisting state.
+   * @param isWhitelisting_ The whitelisting state.
+   */
+  function setIsWhitelisting(bool isWhitelisting_) external onlyOwner {
+    _setIsWhitelisting(isWhitelisting_);
+  }
+
+  /**
+   * @notice Sets a new whitelist manager address.
+   * @param whitelistManager_ The address of a new whitelist manager.
+   */
+  function setWhitelistManager(address whitelistManager_) external onlyOwner {
+    _setWhitelistManager(whitelistManager_);
+  }
+
+  /**
    * @notice Returns the amount of tokens owned by `account` account, obtained after subtraction account fee.
    * @param account The address whose balance should be returned.
    * @return The amount of tokens owned by the specified account.
@@ -183,6 +258,12 @@ contract TAUT is Initializable, ERC20Upgradeable, OwnableUpgradeable, UUPSUpgrad
       accounts = new address[](1);
       accounts[0] = from == address(0) ? to : from;
     } else {
+      if (from == owner() || from == whitelistManager) {
+        if (!isWhitelisted[to]) _addToWhitelist(to);
+      } else if (isWhitelisting && !isWhitelisted[to]) {
+        revert TAUT_NotWhitelisted();
+      }
+
       accounts = new address[](2);
       accounts[0] = from;
       accounts[1] = to;
@@ -208,6 +289,12 @@ contract TAUT is Initializable, ERC20Upgradeable, OwnableUpgradeable, UUPSUpgrad
       emit Transfer(account, address(0), accountFee);
       emit BurnFee(account, accountFee, _balances[account], feeIndex_);
     }
+  }
+
+  function _addToWhitelist(address account) internal {
+    isWhitelisted[account] = true;
+
+    emit AddToWhitelist(account);
   }
 
   /**
@@ -292,6 +379,20 @@ contract TAUT is Initializable, ERC20Upgradeable, OwnableUpgradeable, UUPSUpgrad
     feeRecipient = feeRecipient_;
 
     emit UpdateFeeRecipient(feeRecipient_);
+  }
+
+  function _setIsWhitelisting(bool isWhitelisting_) internal {
+    isWhitelisting = isWhitelisting_;
+
+    emit ToggleWhitelisting(isWhitelisting_);
+  }
+
+  function _setWhitelistManager (address whitelistManager_) internal {
+    require(whitelistManager_ != address(0), "Invalid address");
+
+    whitelistManager = whitelistManager_;
+
+    emit UpdateWhitelistManager(whitelistManager_);
   }
 
   function _timestampToDays(uint256 timestamp) internal pure returns (uint256) {

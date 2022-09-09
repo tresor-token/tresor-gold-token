@@ -6,10 +6,6 @@ https://tresor-token.li
 
 ## Contract
 
-### Documentation
-
-The link to the docs is supposed to be here.
-
 ### ERC20
 
 Tresor Gold Token uses OpenZeppelin's [ERC20Upgradeable](https://github.com/OpenZeppelin/openzeppelin-contracts-upgradeable/blob/51e11611c40ec1ad772e2a075cdc8487bbadf8ad/contracts/token/ERC20/ERC20Upgradeable.sol) as base contract ([Click here](https://docs.openzeppelin.com/contracts/4.x/api/token/erc20) to see OpenZeppelin's ERC20 docs). However, its visibility of the `_balances` state variable has been changed from private to internal to be able to change accounts balances without changing the total supply in order to implement the specific fee model. Original `balanceOf` has been overriden and returns account's balance, obtained after subtraction account's fee (See [here](#balanceof)). Hook `_beforeTokenTransfer` is used to call `collectFees` function (See [here](#collectfees)).
@@ -64,6 +60,14 @@ function feeRecipient() public view returns (address)
 
 Returns current fee recipient's address.
 
+#### <ins>whitelistManager</ins>
+
+```solidity
+function whitelistManager() public view returns (address)
+```
+
+Returns current whitelist manager's address.
+
 #### <ins>feeIndex</ins>
 
 ```solidity
@@ -80,6 +84,14 @@ function feesCollectionDay() public view returns (uint256)
 
 Returns the number of days since the unix epoch when fees was last collected at.
 
+#### <ins>isWhitelisting</ins>
+
+```solidity
+function isWhitelisting() public view returns (bool)
+```
+
+Returns the boolean indicating whether the whitelist is enabled.
+
 #### <ins>accountsFeeIndices</ins>
 
 ```solidity
@@ -92,6 +104,18 @@ Returns the value of [fee index](#feeindex) on the day when `account` balance wa
 | Name    | Type    | Description                         |
 | ------- | ------- | ----------------------------------- |
 | account | address | The account which fee index to get. |
+
+#### <ins>isWhitelisted</ins>
+
+```solidity
+function isWhitelisted(address account) public view returns (bool)
+```
+
+Returns the boolean indicating whether the `account` account is whitelisted.
+
+| Name    | Type    | Description                                    |
+| ------- | ------- | ---------------------------------------------- |
+| account | address | The account to check if it is on the whitelist |
 
 #### <ins>burn</ins>
 
@@ -126,88 +150,6 @@ Returns the amount of tokens owned by `account` account, obtained after subtract
 | Name    | Type    | Description                                   |
 | ------- | ------- | --------------------------------------------- |
 | account | address | The address whose balance should be returned. |
-
-### Contract Events
-
-#### <ins>Mint</ins>
-
-```solidity
-event Mint(address to, uint256 amount, string data)
-```
-
-Emitted when `amount` of tokens was minted to `to` account.
-
-| Name   | Type    | Description                                     |
-| ------ | ------- | ----------------------------------------------- |
-| to     | address | The account minted tokens were assigned to.     |
-| amount | uint256 | The amount of minted tokens.                    |
-| data   | string  | The data about minting (e.g. bank document id). |
-
-#### <ins>Burn</ins>
-
-```solidity
-event Burn(address from, bytes16 id, uint256 amount)
-```
-
-Emitted when `from` account burned `amount` of tokens.
-
-| Name   | Type    | Description                                                      |
-| ------ | ------- | ---------------------------------------------------------------- |
-| from   | address | The caller.                                                      |
-| id     | bytes16 | User id, automatically generated in the web application backend. |
-| amount | uint256 | The amount of burned tokens.                                     |
-
-#### <ins>UpdateFeeRate</ins>
-
-```solidity
-event UpdateFeeRate(uint256 feeRate)
-```
-
-Emitted when fee rate was updated.
-
-| Name    | Type    | Description       |
-| ------- | ------- | ----------------- |
-| feeRate | uint256 | The new fee rate. |
-
-#### <ins>UpdateFeeRecipient</ins>
-
-```solidity
-event UpdateFeeRecipient(address feeRecipient)
-```
-
-Emitted when fee recipient's address was updated.
-
-| Name         | Type    | Description                      |
-| ------------ | ------- | -------------------------------- |
-| feeRecipient | address | The new fee recipient's address. |
-
-#### <ins>CollectFees</ins>
-
-```solidity
-event CollectFees(uint256 amount, uint256 feeIndex)
-```
-
-Emitted when fees were collected.
-
-| Name     | Type    | Description                                          |
-| -------- | ------- | ---------------------------------------------------- |
-| amount   | uint256 | The amount of collected fees.                        |
-| feeIndex | uint256 | The feeIndex value calculated on the collection day. |
-
-#### <ins>BurnFee</ins>
-
-```solidity
-event BurnFee(address from, uint256 amount, uint256 balance, uint256 feeIndex)
-```
-
-Emitted when `amount` of fee was burned from `from` account.
-
-| Name     | Type    | Description                                                  |
-| -------- | ------- | ------------------------------------------------------------ |
-| from     | address | The account fee was burned from.                             |
-| amount   | uint256 | The amount of burned fee.                                    |
-| balance  | uint256 | The account balance.                                         |
-| feeIndex | uint256 | The feeIndex value calculated on the day of the fee burning. |
 
 ### Ownable
 

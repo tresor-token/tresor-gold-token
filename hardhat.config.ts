@@ -6,13 +6,11 @@ import "@nomiclabs/hardhat-waffle";
 import "@openzeppelin/hardhat-upgrades";
 import "@typechain/hardhat";
 import "hardhat-gas-reporter";
-import "solidity-docgen";
 import "solidity-coverage";
 
 dotenv.config();
 
 const config: HardhatUserConfig = {
-  docgen: {},
   solidity: {
     version: "0.8.10",
     settings: {

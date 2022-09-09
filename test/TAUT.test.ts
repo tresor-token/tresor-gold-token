@@ -40,6 +40,8 @@ describe("TAUT", () => {
 
   const initialFeeRecipient = ethers.Wallet.createRandom().address;
   const initialFeeRate = 400;
+  const initialWhitelistManager = ethers.Wallet.createRandom().address;
+  const initialIsWhitelisting = false;
   const secondsPerDay = 24 * 60 * 60;
   const deploymentDay = Math.floor(Date.now() / 1000 / secondsPerDay);
   const defaultData = "";
@@ -49,7 +51,12 @@ describe("TAUT", () => {
   beforeEach(async () => {
     TAUT = await ethers.getContractFactory("TAUT");
 
-    contractProxy = await typedDeployProxy(TAUT, [initialFeeRecipient, initialFeeRate]);
+    contractProxy = await typedDeployProxy(TAUT, [
+      initialFeeRecipient,
+      initialFeeRate,
+      initialWhitelistManager,
+      initialIsWhitelisting,
+    ]);
 
     oneToken = BigNumber.from(10).pow(await contractProxy.decimals());
 
@@ -77,6 +84,82 @@ describe("TAUT", () => {
       const maxAllowedFee = await contractProxy.MAX_FEE_RATE();
 
       await expect(typedDeployProxy(TAUT, [initialFeeRecipient, maxAllowedFee.add(1)])).to.be.reverted;
+    });
+  });
+
+  describe("addToWhitelist", () => {
+    const addToWhitelistEventName = "AddToWhitelist";
+    const account = ethers.Wallet.createRandom().address;
+
+    it("allows the owner to whitelist an account", async () => {
+      await contractProxy.addToWhitelist(account);
+
+      expect(await contractProxy.isWhitelisted(account)).true;
+    });
+
+    it("allows the whitelist manager to whitelist an account", async () => {
+      await contractProxy.setWhitelistManager(account1.address);
+
+      expect(await contractProxy.whitelistManager()).equals(account1.address);
+
+      await contractProxy.connect(account1).addToWhitelist(account);
+
+      expect(await contractProxy.isWhitelisted(account)).true;
+    });
+
+    it(`emits ${addToWhitelistEventName} event`, async () => {
+      await expect(contractProxy.addToWhitelist(account))
+        .to.emit(contractProxy, addToWhitelistEventName)
+        .withArgs(account);
+    });
+
+    it("reverts if caller is neither the owner nor the whitelist manager", async () => {
+      await expect(contractProxy.connect(account2).addToWhitelist(account)).to.be.reverted;
+    });
+
+    it("reverts if the account is already whitelisted", async () => {
+      await contractProxy.addToWhitelist(account);
+
+      await expect(contractProxy.addToWhitelist(account)).to.be.reverted;
+    });
+  });
+
+  describe("removeFromWhitelist", () => {
+    const removeFromWhitelistEventName = "RemoveFromWhitelist";
+    const whitelistedAccount = ethers.Wallet.createRandom().address;
+
+    beforeEach(async () => {
+      await contractProxy.addToWhitelist(whitelistedAccount);
+    });
+
+    it("allows the owner to remove account from whitelist", async () => {
+      await contractProxy.removeFromWhitelist(whitelistedAccount);
+
+      expect(await contractProxy.isWhitelisted(whitelistedAccount)).false;
+    });
+
+    it("allows the whitelist manager to remove account from whitelist", async () => {
+      await contractProxy.setWhitelistManager(account1.address);
+
+      expect(await contractProxy.whitelistManager()).equals(account1.address);
+
+      await contractProxy.connect(account1).removeFromWhitelist(whitelistedAccount);
+
+      expect(await contractProxy.isWhitelisted(whitelistedAccount)).false;
+    });
+
+    it(`emits ${removeFromWhitelistEventName} event`, async () => {
+      await expect(contractProxy.removeFromWhitelist(whitelistedAccount))
+        .to.emit(contractProxy, removeFromWhitelistEventName)
+        .withArgs(whitelistedAccount);
+    });
+
+    it("reverts if caller is neither the owner nor the whitelist manager", async () => {
+      await expect(contractProxy.connect(account2).removeFromWhitelist(whitelistedAccount)).to.be.reverted;
+    });
+
+    it("reverts if the account isn't whitelisted", async () => {
+      await expect(contractProxy.removeFromWhitelist(ethers.Wallet.createRandom().address)).to.be.reverted;
     });
   });
 
@@ -150,6 +233,70 @@ describe("TAUT", () => {
 
       expect(contractProxy.owner()).not.equals(notOwner.address);
       await expect(contractProxy.connect(notOwner).setFeeRate(newFee)).to.be.reverted;
+    });
+  });
+
+  describe("setIsWhitelisting", () => {
+    const toggleWhitelistingEventName = "ToggleWhitelisting";
+
+    it("sets the whitelisting state", async () => {
+      const whitelistingIsTrue = true;
+      await contractProxy.setIsWhitelisting(whitelistingIsTrue);
+
+      expect(await contractProxy.isWhitelisting()).equals(whitelistingIsTrue);
+
+      const whitelistingIsFalse = false;
+      await contractProxy.setIsWhitelisting(whitelistingIsFalse);
+
+      expect(await contractProxy.isWhitelisting()).equals(whitelistingIsFalse);
+    });
+
+    it(`emits ${toggleWhitelistingEventName} event`, async () => {
+      const whitelistingIsTrue = true;
+      const feeRate = await contractProxy.feeRate();
+
+      await expect(contractProxy.setIsWhitelisting(whitelistingIsTrue))
+        .to.emit(contractProxy, toggleWhitelistingEventName)
+        .withArgs(whitelistingIsTrue);
+    });
+
+    it("reverts if caller is not the owner", async () => {
+      const notOwner = account1;
+
+      expect(contractProxy.owner()).not.equals(notOwner.address);
+      await expect(contractProxy.connect(notOwner).setIsWhitelisting(false)).to.be.reverted;
+    });
+  });
+
+  describe("setWhitelistManager", () => {
+    const updateWhitelistManagerEventName = "UpdateWhitelistManager";
+
+    it("sets a new whitelist manager's address", async () => {
+      const whitelistManager = await contractProxy.whitelistManager();
+      const newWhitelistManager = ethers.Wallet.createRandom().address;
+
+      await contractProxy.setWhitelistManager(newWhitelistManager);
+
+      expect(await contractProxy.whitelistManager()).equals(newWhitelistManager);
+      expect(newWhitelistManager).not.equals(whitelistManager);
+    });
+
+    it(`emits ${updateWhitelistManagerEventName} event`, async () => {
+      const newWhitelistManager = ethers.Wallet.createRandom().address;
+      await expect(contractProxy.setWhitelistManager(newWhitelistManager))
+        .to.emit(contractProxy, updateWhitelistManagerEventName)
+        .withArgs(newWhitelistManager);
+    });
+
+    it("reverts if a new whitelist manager's address is the Zero Address", async () => {
+      await expect(contractProxy.setWhitelistManager(ethers.constants.AddressZero)).to.be.reverted;
+    });
+
+    it("reverts if caller is not the owner", async () => {
+      const notOwner = account1;
+
+      expect(contractProxy.owner()).not.to.equal(notOwner.address);
+      await expect(contractProxy.connect(notOwner).setWhitelistManager(notOwner.address)).to.be.reverted;
     });
   });
 
@@ -373,43 +520,99 @@ describe("TAUT", () => {
     });
   });
 
-  describe("tokens transferring", () => {
-    it("transfers tokens", async () => {
-      const amountToMint = getPositiveInteger();
-      const amountToTransfer = oneToken.mul(amountToMint).sub(oneToken);
-      const recipientInitialBalance = await contractProxy.balanceOf(account1.address);
+  describe("whitelisting", () => {
+    let amountToTransfer: BigNumber;
 
-      await contractProxy.mint(owner.address, amountToMint, defaultData);
-
-      const senderBalanceAfterMint = await contractProxy.balanceOf(owner.address);
-
-      await contractProxy.connect(owner).transfer(account1.address, amountToTransfer);
-
-      expect(await contractProxy.balanceOf(account1.address)).equals(
-        recipientInitialBalance.add(amountToTransfer)
-      );
-      expect(await contractProxy.balanceOf(owner.address)).equals(senderBalanceAfterMint.sub(amountToTransfer));
+    const amountToMint = getPositiveInteger();
+    beforeEach(async () => {
+      amountToTransfer = oneToken.mul(amountToMint).sub(oneToken);
+      await contractProxy.setIsWhitelisting(true);
     });
 
-    it("transfers tokens from third-party account", async () => {
-      const amountToMint = getPositiveInteger();
-      const amountToTransferFrom = oneToken.mul(amountToMint).sub(oneToken);
-      const recipientInitialBalance = await contractProxy.balanceOf(account2.address);
+    it("allows to transfer from balances of the owner or whitelist manager to not whitelisted addresses", async () => {
+      // transfer from owner's balance
+      await contractProxy.mint(owner.address, amountToMint, defaultData);
+
+      const recipientFromOwner = ethers.Wallet.createRandom().address;
+
+      expect(await contractProxy.isWhitelisted(recipientFromOwner)).false;
+
+      const recipientFromOwnerInitialBalance = await contractProxy.balanceOf(recipientFromOwner);
+
+      await contractProxy.transfer(recipientFromOwner, amountToTransfer);
+
+      const recipientFromOwnerBalanceAfterTransfer = await contractProxy.balanceOf(recipientFromOwner);
+
+      expect(recipientFromOwnerBalanceAfterTransfer).equals(
+        recipientFromOwnerInitialBalance.add(amountToTransfer)
+      );
+
+      // transfer from whitelist manager's balance
+      await contractProxy.setWhitelistManager(account1.address);
+
+      expect(account1.address).equals(await contractProxy.whitelistManager());
+
+      await contractProxy.mint(account1.address, amountToMint, defaultData);
+
+      await contractProxy.connect(account1).approve(account2.address, amountToTransfer);
+
+      const recipientFromWhitelistManager = ethers.Wallet.createRandom().address;
+
+      expect(await contractProxy.isWhitelisted(recipientFromWhitelistManager)).false;
+
+      const recipientFromWhitelistManagerInitialBalance = await contractProxy.balanceOf(
+        recipientFromWhitelistManager
+      );
+
+      await contractProxy
+        .connect(account2)
+        .transferFrom(account1.address, recipientFromWhitelistManager, amountToTransfer);
+
+      const recipientFromWhitelistManagerBalanceAfterTransfer = await contractProxy.balanceOf(
+        recipientFromWhitelistManager
+      );
+
+      expect(recipientFromWhitelistManagerBalanceAfterTransfer).equals(
+        recipientFromWhitelistManagerInitialBalance.add(amountToTransfer)
+      );
+    });
+
+    it("reverts when transferring from not authorized balance to not whitelisted address", async () => {
+      await contractProxy.mint(account2.address, amountToMint, defaultData);
+
+      const recipient = ethers.Wallet.createRandom().address;
+
+      expect(await contractProxy.isWhitelisted(recipient)).false;
+      await expect(contractProxy.connect(account2).transfer(recipient, amountToTransfer)).to.be.reverted;
+
+      await contractProxy.connect(account2).approve(owner.address, amountToMint);
+
+      await expect(contractProxy.transferFrom(account2.address, recipient, amountToTransfer)).to.be.reverted;
+    });
+
+    it("whitelists the recipient after the transfer from authorized balances regardless of whitelisting state", async () => {
+      await contractProxy.mint(owner.address, amountToMint, defaultData);
+
+      const recipient1 = ethers.Wallet.createRandom().address;
+
+      expect(await contractProxy.isWhitelisted(recipient1)).false;
+
+      await contractProxy.transfer(recipient1, amountToTransfer);
+
+      expect(await contractProxy.isWhitelisted(recipient1)).true;
+
+      await contractProxy.setIsWhitelisting(false);
+      await contractProxy.setWhitelistManager(account1.address);
 
       await contractProxy.mint(owner.address, amountToMint, defaultData);
 
-      const senderBalanceAfterMint = await contractProxy.balanceOf(owner.address);
+      const recipient2 = ethers.Wallet.createRandom().address;
 
-      await contractProxy.connect(owner).approve(account1.address, amountToTransferFrom);
+      expect(await contractProxy.isWhitelisted(recipient2)).false;
 
-      await contractProxy.connect(account1).transferFrom(owner.address, account2.address, amountToTransferFrom);
+      await contractProxy.transfer(recipient2, amountToTransfer);
 
-      expect(await contractProxy.balanceOf(account2.address)).equals(
-        recipientInitialBalance.add(amountToTransferFrom)
-      );
-      expect(await contractProxy.balanceOf(owner.address)).equals(
-        senderBalanceAfterMint.sub(amountToTransferFrom)
-      );
+      expect(await contractProxy.isWhitelisted(recipient2)).true;
     });
   });
 });
