@@ -368,11 +368,13 @@ describe("TAUT", () => {
     const { hexlify, randomBytes } = ethers.utils;
     const userId = hexlify(randomBytes(16));
 
-    it("burns caller's tokens, if their amount is multiple of 1000 tokens", async () => {
+    it("burns caller's tokens", async () => {
       const { address } = account1;
-      const multiplier = chance.natural({ min: 1, max: 100 });
-      await contractProxy.mint(address, chance.natural({ min: 1000 * multiplier }), defaultData);
-      const amountToBurn = oneToken.mul(1000 * multiplier);
+      const amountToMint = BigNumber.from(getPositiveInteger());
+
+      await contractProxy.mint(address, amountToMint, defaultData);
+
+      const amountToBurn = oneToken.mul(chance.natural({ min: 0, max: amountToMint }));
       const initialBalance = await contractProxy.balanceOf(address);
       const initialTotalSupply = await contractProxy.totalSupply();
 
@@ -384,19 +386,12 @@ describe("TAUT", () => {
 
     it(`emits ${burnEventName} event`, async () => {
       const { address } = owner;
-      const amount = 1000;
+      const amount = BigNumber.from(getPositiveInteger());
       await contractProxy.mint(address, amount, defaultData);
 
       await expect(contractProxy.burn(userId, oneToken.mul(amount)))
         .to.emit(contractProxy, burnEventName)
         .withArgs(address, userId, oneToken.mul(amount));
-    });
-
-    it("reverts if caller's amount of tokens isn't multiple of 1000 tokens", async () => {
-      const { address } = owner;
-      await contractProxy.mint(address, 1000, defaultData);
-
-      await expect(contractProxy.burn(userId, oneToken.mul(999))).to.be.reverted;
     });
   });
 

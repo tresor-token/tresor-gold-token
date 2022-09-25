@@ -123,8 +123,7 @@ Returns the boolean indicating whether the `account` account is whitelisted.
 function burn(bytes16 id, uint256 amount) external
 ```
 
-If `amount` of tokens is multiple of 1000000000000000000000, destroys the amount
-from the caller's account, reducing the total supply.
+Destroys `amount` tokens from the caller's account, reducing the total supply.
 
 | Name   | Type    | Description                                                      |
 | ------ | ------- | ---------------------------------------------------------------- |

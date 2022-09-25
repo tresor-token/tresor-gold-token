@@ -115,7 +115,12 @@ contract TAUT is Initializable, ERC20Upgradeable, OwnableUpgradeable, UUPSUpgrad
    * @param whitelistManager_ The address of whitelist manager.
    * @param isWhitelisting_ The whitelisting state.
    */
-  function initialize(address feeRecipient_, uint256 feeRate_, address whitelistManager_, bool isWhitelisting_) public initializer {
+  function initialize(
+    address feeRecipient_,
+    uint256 feeRate_,
+    address whitelistManager_,
+    bool isWhitelisting_
+  ) public initializer {
     __ERC20_init("Tresor Gold Token", "TAUT");
     __Ownable_init();
     __UUPSUpgradeable_init();
@@ -148,21 +153,18 @@ contract TAUT is Initializable, ERC20Upgradeable, OwnableUpgradeable, UUPSUpgrad
   function removeFromWhitelist(address account) external {
     require(msg.sender == owner() || msg.sender == whitelistManager, "Invalid caller");
     require(isWhitelisted[account] == true, "Not whitelisted");
-    
+
     isWhitelisted[account] = false;
 
     emit RemoveFromWhitelist(account);
   }
 
   /**
-   * @notice If `amount` of tokens is multiple of 1000000000000000000000, destroys the amount
-   * from the caller's account, reducing the total supply.
+   * @notice Destroys `amount` tokens from the caller's account, reducing the total supply.
    * @param id User id, automatically generated in the web application backend.
    * @param amount The amount of tokens to burn.
    */
   function burn(bytes16 id, uint256 amount) external {
-    require(amount % 1e21 == 0, "Must be multiple of 1000 tokens");
-
     _burn(msg.sender, amount);
 
     emit Burn(msg.sender, id, amount);
@@ -186,7 +188,7 @@ contract TAUT is Initializable, ERC20Upgradeable, OwnableUpgradeable, UUPSUpgrad
     uint256 amount,
     string calldata data
   ) external onlyOwner {
-    uint256 tokensAmount = amount * 10 ** decimals();
+    uint256 tokensAmount = amount * 10**decimals();
     _mint(account, tokensAmount);
 
     emit Mint(account, tokensAmount, data);
@@ -387,7 +389,7 @@ contract TAUT is Initializable, ERC20Upgradeable, OwnableUpgradeable, UUPSUpgrad
     emit ToggleWhitelisting(isWhitelisting_);
   }
 
-  function _setWhitelistManager (address whitelistManager_) internal {
+  function _setWhitelistManager(address whitelistManager_) internal {
     require(whitelistManager_ != address(0), "Invalid address");
 
     whitelistManager = whitelistManager_;
