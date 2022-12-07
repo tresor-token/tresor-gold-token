@@ -8,7 +8,7 @@ https://tresor-token.li
 
 ### ERC20
 
-Tresor Gold Token uses OpenZeppelin's [ERC20Upgradeable](https://github.com/OpenZeppelin/openzeppelin-contracts-upgradeable/blob/51e11611c40ec1ad772e2a075cdc8487bbadf8ad/contracts/token/ERC20/ERC20Upgradeable.sol) as base contract ([Click here](https://docs.openzeppelin.com/contracts/4.x/api/token/erc20) to see OpenZeppelin's ERC20 docs). However, its visibility of the `_balances` state variable has been changed from private to internal to be able to change accounts balances without changing the total supply in order to implement the specific fee model. Original `balanceOf` has been overriden and returns account's balance, obtained after subtraction account's fee (See [here](#balanceof)). Hook `_beforeTokenTransfer` is used to call `collectFees` function (See [here](#collectfees)).
+Tresor Gold Token uses OpenZeppelin's [ERC20Upgradeable](https://github.com/OpenZeppelin/openzeppelin-contracts-upgradeable/blob/51e11611c40ec1ad772e2a075cdc8487bbadf8ad/contracts/token/ERC20/ERC20Upgradeable.sol) as base contract ([Click here](https://docs.openzeppelin.com/contracts/4.x/api/token/erc20) to see OpenZeppelin's ERC20 docs). However, its visibility of the `_balances` state variable has been changed from private to internal to be able to change accounts balances without changing the total supply in order to implement the specific fee model. The visibility attributes of the `_totalSupply` state variable and the corresponding function `totalSupply` have been changed from private to internal and from public to external respectively in order to be able to consistently display total supply considering fees and for gas optimization purposes. The visibility attributes of functions `balanceOf`, `transfer`, `approve`, `transferFrom`, `increaseAllowance`, `decreaseAllowance` have been changed from public to external for gas optimization purposes. Original `balanceOf` has been overriden and returns account's balance, obtained after subtraction account's fee (See [here](#balanceof)). Hook `_beforeTokenTransfer` is used to call `collectFees` function (See [here](#collectfees)).
 
 ### Contract public API
 
@@ -51,6 +51,14 @@ function feeRate() public view returns (uint256)
 ```
 
 Returns current fee rate, which was set by contract's owner. Fee rate cannot be greater than [MAX_FEE_RATE](#max_fee_rate).
+
+#### <ins>feeRateManager</ins>
+
+```solidity
+function feeRateManager() public view returns (address)
+```
+
+Returns current fee rate manager's address.
 
 #### <ins>feeRecipient</ins>
 
@@ -141,7 +149,7 @@ Collects total fees and fee recipient fees and transfers them to the fee recipie
 #### <ins>balanceOf</ins>
 
 ```solidity
-function balanceOf(address account) public view returns (uint256)
+function balanceOf(address account) external view returns (uint256)
 ```
 
 Returns the amount of tokens owned by `account` account, obtained after subtraction account fee.
@@ -152,11 +160,16 @@ Returns the amount of tokens owned by `account` account, obtained after subtract
 
 ### Ownable
 
-The contract has an owner and its corresponding functionality, following OpenZeppelin's [OwnableUpgradeable](https://github.com/OpenZeppelin/openzeppelin-contracts-upgradeable/blob/51e11611c40ec1ad772e2a075cdc8487bbadf8ad/contracts/access/OwnableUpgradeable.sol). The owner can mint tokens, set fee rate, and change `owner` and `feeRecipient` addresses.
+The contract has owner and its corresponding functionality, following OpenZeppelin's [OwnableUpgradeable](https://github.com/OpenZeppelin/openzeppelin-contracts-upgradeable/blob/51e11611c40ec1ad772e2a075cdc8487bbadf8ad/contracts/access/OwnableUpgradeable.sol). The owner role managed by
+OpenZeppelin's [TimelockController](https://github.com/OpenZeppelin/openzeppelin-contracts/blob/fac768cd2c1311955d30fd409320d2c06e32070b/contracts/governance/TimelockController.sol).
 
 ### Upgradeable
 
 A new implementation contract can be deployed, and the proxy contract will forward calls to the new contract. Access to the upgrade functionality is guarded by an [`owner`](#ownable). Upgradeability provided by OpenZeppelin's [UUPSUpgradeable](https://github.com/OpenZeppelin/openzeppelin-contracts-upgradeable/blob/51e11611c40ec1ad772e2a075cdc8487bbadf8ad/contracts/proxy/utils/UUPSUpgradeable.sol) and [Initializable](https://github.com/OpenZeppelin/openzeppelin-contracts-upgradeable/blob/51e11611c40ec1ad772e2a075cdc8487bbadf8ad/contracts/proxy/utils/Initializable.sol).
+
+### Authenticated roles
+
+There are two authenticated roles defined in the contract: [`owner`](#ownable) and `feeRateManager`. Each of them is managed by corresponding [TimelockController](https://github.com/OpenZeppelin/openzeppelin-contracts/blob/fac768cd2c1311955d30fd409320d2c06e32070b/contracts/governance/TimelockController.sol).
 
 ## Testing
 
