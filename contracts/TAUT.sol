@@ -132,8 +132,9 @@ contract TAUT is Initializable, ERC20Upgradeable, OwnableUpgradeable, UUPSUpgrad
 
   /**
    * @notice Initializes the contract.
-   * @param feeRecipient_ The address of fee recipient.
    * @param feeRate_ The fee rate.
+   * @param feeRateManager_ The address of fee rate manager
+   * @param feeRecipient_ The address of fee recipient.
    * @param whitelistManager_ The address of whitelist manager.
    * @param isWhitelisting_ The whitelisting state.
    */

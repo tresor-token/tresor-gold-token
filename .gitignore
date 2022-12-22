@@ -12,6 +12,7 @@ coverage.json
 typechain
 .vscode
 .openzeppelin
+arguments.ts
 
 #Hardhat files
 cache

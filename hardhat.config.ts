@@ -21,6 +21,14 @@ const config: HardhatUserConfig = {
     },
   },
   networks: {
+    mainnet: {
+      url: process.env.MAINNET_URL || "",
+      accounts: process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
+    },
+    polygon: {
+      url: process.env.POLYGON_URL || "",
+      accounts: process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
+    },
     goerli: {
       url: process.env.GOERLI_URL || "",
       accounts: process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
@@ -31,7 +39,7 @@ const config: HardhatUserConfig = {
     },
   },
   gasReporter: {
-    enabled: false,
+    enabled: true,
     currency: "USD",
     coinmarketcap: process.env.COINMARKETCAP_API_KEY,
     token: "ETH",
